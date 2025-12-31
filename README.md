@@ -5,5 +5,5 @@
 Для работы кода вам понадобится только выполнить эту команду:
 
 ```
-pip install Levenshtein  
+pip install Levenshtein chardet
 ```
