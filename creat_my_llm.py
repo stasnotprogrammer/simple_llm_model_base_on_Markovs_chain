@@ -122,6 +122,6 @@ def remove_punctuation_extended(text):
     return ' '.join(text)
 
 if __name__ == "__main__":
-    m = MY_LLM(data=remove_punctuation_extended(read_books('books')), N=7)
+    m = MY_LLM(data=remove_punctuation_extended(read_books('books')), N=7) #В данном вариате файлы для обучения находятся в директории books, измените на вашу директорию с данными
     m.creat_model()
     m.safe_model("model.pkl")
