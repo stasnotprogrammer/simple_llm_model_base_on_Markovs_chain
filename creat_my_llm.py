@@ -1,15 +1,26 @@
 #!venv/bin/python
-from chardet.universaldetector import UniversalDetector
+from array import array
 import pickle
-import os
 
 
 class MY_LLM:
-    def __init__(self, data, N=5):
-        self.data = tuple(data.split())
+    def __init__(self, data:str, N=5, max_indexes_for_word = 50):
+        self.data = tuple(self.id_words(data))
         self.N = N - 1
+        #self.max_indexes_for_word = max_indexes_for_word
         self.model = {}
     
+    def id_words(self, text:str):
+        print("Токенизация текста")
+        st = text.split()
+        self.word_to_id = {w:i for i, w in enumerate(set(st))}
+        id_text = []
+        for word in st:
+            id_text.append(self.word_to_id[word])
+        del st
+        print("Токенизация прошла успешно")
+        return id_text
+
     def first_version_model(self):
         '''
         Подсчитывает количество повторений слов
@@ -18,13 +29,16 @@ class MY_LLM:
         model = {}
         print("Идёт подсчет слов")
         print(f'Найдено {len(self.data)} слов')
-        for i in range(len(self.data) - self.N):
+        l = len(self.data) - self.N
+        for i in range(l):
             model[self.data[i:i+self.N]] = {}
-        for i in range(len(self.data) - self.N):
+        print()
+        for i in range(l):
             try:
                 model[self.data[i:i+self.N]][self.data[i+self.N]] += 1
             except:
                 model[self.data[i:i+self.N]][self.data[i+self.N]] = 1
+        del l
         return model
     
     def two_version_model(self):
@@ -36,18 +50,25 @@ class MY_LLM:
             model[key1] = {}
             for key2 in model_[key1]:
                 model[key1][key2] = model_[key1][key2] / sum_
+        print("Подсчет вероятностей прошёл успешно")
         return model
     
     def creat_model(self):
         print('Создаю модель')
         model = self.two_version_model()
+        print('Токенизация прошла успешна')
         self.model = {"N":self.N,
                       "LLM": {
                           "model":model,
-                          "keys": list(model.keys())
-                      }}
+                          "keys": list(model.keys()),
+                      },
+                      'id': {
+                          'word_to_id': self.word_to_id
+                      }
+                     }
+        print('Модель создана')
     
-    def safe_model(self, filename):
+    def safe_model(self, filename=f'model.pkl'):
         print("Сохраняю модель")
         if self.model:
             with open(filename, "wb") as f:
@@ -56,72 +77,15 @@ class MY_LLM:
         else:
             print("Нет модели ты идиот")
 
-def detect_encoding(file):
-    detector = UniversalDetector()
-    with open(file, 'rb') as f:
-        for line in f:
-            detector.feed(line)
-            if detector.done:
-                break
-        detector.close()
-    return detector.result['encoding']
 
-def read_books(path):
-    text = ''
-    n = 1
-    all_ = len(os.listdir(path))
-    for book in os.listdir(path):
-        print(f"[{n}/{all_}] Считыаю данные с {book}", end='\r')
-        with open(f"{path}/{book}", "r", encoding=detect_encoding(f"books/{book}")) as f:
-            text += str(f.read()).lower()
-        n += 1
-    print()
-    return text
+'''Маленький кусок текста, который я использую для экспериментов. Понял кто-нибудь отсылку на JOJO, если да то напишите!'''
+text = 'кот ел сыр. кот ел коз. ля-ля тополя. гойда. а я пиво. соно чино садаме джоооооджоооо'
 
-def remove_punctuation_extended(text):
-    print('Очищаю текст')
-    rem_data = ['!', '@', '#',
-                '$', '%', '^',
-                '&', '*', '(',
-                ')', '_' ,'-',
-                '+', '=', '{',
-                '}' ,'[', ']',
-                '/', '|', ';',
-                ':', '"', "'",
-                '<', '>', ',',
-                '.', '?', '/',
-                '~', '`', '\\',
-                'www', '…', '»',
-                '“', '–', '«',
-                '•', '1', '2',
-                '3', '4', '5',
-                '6', '7', '8',
-                '9', '0', 'a',
-                'b', 'c', 'd',
-                'e', 'f', 'g',
-                'h', 'i', 'j',
-                'k', 'l', 'm',
-                'n', 'o', 'p',
-                'q', 'r', 's',
-                't', 'u', 'v',
-                'w', 'x', 'y',
-                'z', 'ѣ', '®',
-                '©', '™', '№',
-                '—'
-                ]
-    rem_ = '\n\t'
-    for r in rem_data:
-        if r in text:
-            text = text.replace(r, '')
-    for r in rem_:
-        if r in text:
-            text = text.replace(r, ' ')
-
-    text = text.split()
-    print('Текст очищен')
-    return ' '.join(text)
+def read_clear_text(filename:str):
+    with open(filename, 'r') as f:
+        return f.read()
 
 if __name__ == "__main__":
-    m = MY_LLM(data=remove_punctuation_extended(read_books('books')), N=7) #В данном вариате файлы для обучения находятся в директории books, измените на вашу директорию с данными
+    m = MY_LLM(data=read_clear_text('text_for_model/text_for_model.txt'), N=5)
     m.creat_model()
     m.safe_model("model.pkl")

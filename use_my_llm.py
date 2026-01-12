@@ -1,42 +1,28 @@
 #!venv/bin/python
 from Levenshtein import distance
+from array import array
 import pickle
 import random
 import string
 
 class useLLM:
-    def __init__(self, model):
+    def __init__(self, model, prosent = None):
+        print('Загрузка модели...')
         with open(model, 'rb') as f:
             M = pickle.load(f)
         self.N = M['N']
         self.model = M['LLM']['model']
-        self.keys = M['LLM']['keys']
+        self.keys = tuple(M['LLM']['keys'])
+        self.word_to_id = M['id']['word_to_id']
+        self.id_to_word = {v:k for k,v in self.word_to_id.items()}
+        if not prosent:
+            prosent = (self.N - 1)/(self.N)
+        self.prosent = prosent
+        del M
+        print('Модель загружена')
+        print(f'N - {self.N + 1}') # Длинна граммы равна N - 1 -> self.N = N - 1 -> N = self.N + 1
+        print(f'Количество N грамм - {len(self.keys)}')
     
-    def trying_in(self, part: list, whole: list, percent: float = 1):
-        i, j = 0, 0   
-        while i < len(part) and j < len(whole):
-            if part[i] == whole[j]:
-                i += 1
-            j += 1
-        
-        if i == len(part):
-            return True
-        
-        str_part = " ".join(part)
-        
-        if len(part) <= len(whole):
-            best_similarity = 0
-            for start in range(len(whole) - len(part) + 1):
-                str_sub = " ".join(whole[start:start + len(part)])
-                similarity = 1 - distance(str_part, str_sub) / max(len(str_part), len(str_sub))
-                best_similarity = max(best_similarity, similarity)
-            
-            return best_similarity >= percent
-        else:
-            str_whole = " ".join(whole)
-            similarity = 1 - distance(str_part, str_whole) / max(len(str_part), len(str_whole))
-            return similarity >= percent
-
     def remove_punctuation(self, text):
         punctuation = string.punctuation
         russian_punctuation = '0123456789«»„“—–…¿¡•©®™°±≤≥≠≈∞µ∂∑∏π∫Ω\n\t'
@@ -46,24 +32,67 @@ class useLLM:
         cleaned_text = ' '.join(cleaned_text.split())
         return cleaned_text
 
-    def next_word(self, text, quantity, prosent=0.8):
+    def hight_firts_letter(self, text:list[str]):
+        '''
+        text - Список слов ['яблоко','банан','груша']
+        '''
+        text = list(map(list, text))
+        text[0][0] = text[0][0].upper()
+        for i in range(1, len(text)):
+            try:
+                if text[i-1][len(text[i-1])-1] in ['.', '!', '?']:
+                    text[i][0] = text[i][0].upper()
+            except: ...
+        return [''.join(word) for word in text]
+    
+    def del_replays(self, text:list):
+        new_text = []
+        for word in text:
+            if not new_text or word != new_text[-1]:
+                new_text.append(word)
+        return new_text
+
+    def text_to_id(self, text:list):
+        list_id = []
+        for word in text:
+            list_id.append(self.word_to_id.get(word, -1))
+        return list_id
+    
+    def id_to_text(self, list_id:list):
+        text = []
+        for id in list_id:
+            text.append(self.id_to_word.get(id, ''))
+        return text
+
+    def get_key(self, Ngram:list, prosent:float) -> int:
+        if Ngram in self.keys:
+            return self.keys.index(Ngram)
+        else:
+            for key in self.keys:
+                c = 0
+                for i in Ngram:
+                    if i in key:
+                        c += 1
+                if c/len(Ngram) >= prosent:
+                    return self.keys.index(key)
+            if not (c/len(Ngram) >= prosent):
+                return random.randint(0, len(self.keys)-1)
+
+    def next_word(self, text, quantity):
         text = self.remove_punctuation(text).lower().split()
+        text = self.text_to_id(text)
         print('Идёт генерация')
         for i in range(quantity):
             if len(text) >= self.N:
                 usetext = text[-self.N:]
             else:
                 usetext = text
-            k = random.choice(self.keys)
-            for key in self.keys:
-                if self.trying_in(usetext, key, percent=prosent):
-                    k = key
-            text.append(random.choices(list(self.model[k].keys()), weights=list(self.model[k].values()))[0])
+            k = self.get_key(usetext, prosent=self.prosent)
+            text.append(random.choices(list(self.model[self.keys[k]].keys()), weights=list(self.model[self.keys[k]].values()))[0])
             print(f'{(i+1)*100/quantity}% [{'='*int((i+1)*100/quantity)}>{' '*int(100-(i+1)*100/quantity)}]', end='\r')
         print()
-                    
-                
-        return ' '.join(text)
+        text = self.del_replays(text)            
+        return ' '.join(self.hight_firts_letter(self.id_to_text(text)))
             
 
 def main():
